@@ -3,6 +3,9 @@ local cfg = Config.DamageSystem
 if (not cfg.enabled) then return end
 if (not cfg.torqueMultiplierEnabled and not cfg.preventVehicleFlip and not cfg.limpMode) then return end
 
+local lastCheckedRoll = GetGameTimer()
+local isFlipped = false
+
 -- Runs every frame while in vehicle (torque and flip control are per-frame)
 ---@diagnostic disable-next-line: param-type-mismatch
 AddStateBagChangeHandler("currentVehicle", nil, function(bagName, key, value)
@@ -45,9 +48,14 @@ AddStateBagChangeHandler("currentVehicle", nil, function(bagName, key, value)
 
         -- Flip prevention: disable steering when rolled over and nearly stopped
         if (cfg.preventVehicleFlip) then
-            local roll = GetEntityRoll(veh)
+            if (GetGameTimer() - lastCheckedRoll > 500) then
+                local roll = GetEntityRoll(veh)
+                isFlipped = (roll > 75.0 or roll < -75.0)
 
-            if ((roll > 75.0 or roll < -75.0) and (GetEntitySpeed(veh) < 5)) then
+                lastCheckedRoll = GetGameTimer()
+            end
+
+            if (isFlipped and (GetEntitySpeed(veh) < 5)) then
                 sleep = 1
 
                 DisableControlAction(2, 59, true)
@@ -59,4 +67,6 @@ AddStateBagChangeHandler("currentVehicle", nil, function(bagName, key, value)
 
         Wait(sleep)
     end
+
+    isFlipped = false
 end)
