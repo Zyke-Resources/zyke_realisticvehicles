@@ -1,5 +1,63 @@
 if (not Config.Settings.debug) then return end
 
+local function drawDebugText(x, y, text, r, g, b)
+    SetTextFont(4)
+    SetTextScale(0.32, 0.32)
+    SetTextColour(r or 255, g or 255, b or 255, 255)
+    SetTextDropshadow(1, 0, 0, 0, 255)
+    SetTextEntry("STRING")
+    AddTextComponentString(text)
+    DrawText(x, y)
+end
+
+CreateThread(function()
+    while (true) do
+        local playerPed = PlayerPedId()
+        local veh = GetVehiclePedIsIn(playerPed, false)
+        local inVehicle = veh ~= 0
+
+        if (not inVehicle) then veh = GetVehiclePedIsIn(playerPed, true) end
+
+        if (veh ~= 0 and DoesEntityExist(veh)) then
+            local engineHealth     = GetVehicleEngineHealth(veh)
+            local bodyHealth       = GetVehicleBodyHealth(veh)
+            local petrolTankHealth = GetVehiclePetrolTankHealth(veh)
+            local isOnFire         = IsEntityOnFire(veh)
+            local engineRunning    = GetIsVehicleEngineRunning(veh)
+
+            local x, y = 0.01, 0.38
+            local lineH = 0.022
+
+            local header = inVehicle and "~y~-- Vehicle Health (IN) --" or "~o~-- Vehicle Health (OUT) --"
+            drawDebugText(x, y, header)
+            y = y + lineH
+
+            local eColor = engineHealth > 300 and {255, 255, 255} or (engineHealth > 0 and {255, 165, 0} or {255, 50, 50})
+            drawDebugText(x, y, ("Engine:     %.1f"):format(engineHealth), eColor[1], eColor[2], eColor[3])
+            y = y + lineH
+
+            local bColor = bodyHealth > 300 and {255, 255, 255} or {255, 165, 0}
+            drawDebugText(x, y, ("Body:       %.1f"):format(bodyHealth), bColor[1], bColor[2], bColor[3])
+            y = y + lineH
+
+            local pColor = petrolTankHealth > 750 and {255, 255, 255} or {255, 165, 0}
+            drawDebugText(x, y, ("PetrolTank: %.1f"):format(petrolTankHealth), pColor[1], pColor[2], pColor[3])
+            y = y + lineH
+
+            if (isOnFire) then
+                drawDebugText(x, y, "On Fire:    ~r~YES", 255, 50, 50)
+            else
+                drawDebugText(x, y, "On Fire:    ~g~NO", 100, 255, 100)
+            end
+            y = y + lineH
+
+            drawDebugText(x, y, ("Engine On:  %s"):format(engineRunning and "~g~YES" or "~r~NO"))
+        end
+
+        Wait(0)
+    end
+end)
+
 CreateThread(function()
     local sphereSize = 0.2
     while (true) do
