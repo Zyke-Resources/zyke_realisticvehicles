@@ -8,6 +8,7 @@ local isInFireMode = false
 local currentVehicle = nil
 local previousVehicle = nil
 local vehicleClass = nil
+local lastDebugPrint = 0
 
 -- Health tracking: last (previous tick), current (native read), new (calculated target)
 local healthEngineLast     = 1000.0
@@ -202,7 +203,9 @@ AddStateBagChangeHandler("currentVehicle", nil, function(bagName, key, value)
                 onVehicleEnter(currentVehicle)
             end
 
-            if (Config.Settings.debug) then
+            if (Config.Settings.debug and GetGameTimer() - lastDebugPrint > 2000) then
+                lastDebugPrint = GetGameTimer()
+
                 print(('[FIRE DEBUG] tick | onFire=%s | fireMode=%s | engineCur=%.2f | engineNew=%.2f | engineLast=%.2f | petrolCur=%.2f | wasInVeh=%s'):format(
                     tostring(IsEntityOnFire(currentVehicle)), tostring(isInFireMode),
                     healthEngineCurrent, healthEngineNew, healthEngineLast,
