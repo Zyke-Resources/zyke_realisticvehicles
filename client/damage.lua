@@ -4,6 +4,7 @@ local cfg = Config.DamageSystem
 
 -- State
 local wasInVehicleLastTick = false
+local isInFireMode = false
 local currentVehicle = nil
 local previousVehicle = nil
 local vehicleClass = nil
@@ -105,6 +106,10 @@ local function processDamage(veh)
     healthBodyCurrent       = GetVehicleBodyHealth(veh)
     healthPetrolTankCurrent = GetVehiclePetrolTankHealth(veh)
 
+    -- Track fire mode: enter when entity is on fire, exit only on full repair
+    if (IsEntityOnFire(veh)) then isInFireMode = true end
+    if (healthEngineCurrent == 1000) then isInFireMode = false end
+
     -- Reset tracking when fully repaired
     if (healthEngineCurrent == 1000) then healthEngineLast = 1000.0 end
     if (healthBodyCurrent == 1000) then healthBodyLast = 1000.0 end
@@ -114,9 +119,10 @@ local function processDamage(veh)
     healthBodyNew       = healthBodyCurrent
     healthPetrolTankNew = healthPetrolTankCurrent
 
-    local engineDelta     = healthEngineLast - healthEngineCurrent
-    local bodyDelta       = healthBodyLast - healthBodyCurrent
-    local petrolTankDelta = healthPetrolTankLast - healthPetrolTankCurrent
+    -- Clamp deltas to non-negative: only process damage, never amplify native healing
+    local engineDelta     = math.max(0, healthEngineLast - healthEngineCurrent)
+    local bodyDelta       = math.max(0, healthBodyLast - healthBodyCurrent)
+    local petrolTankDelta = math.max(0, healthPetrolTankLast - healthPetrolTankCurrent)
 
     local classMultiplier       = cfg.classDamageMultiplier[vehicleClass] or 1.0
     local engineDeltaScaled     = engineDelta * cfg.damageFactorEngine * classMultiplier
@@ -135,20 +141,25 @@ local function processDamage(veh)
     -- No damage on the vehicle
     if (healthEngineCurrent == 1000.0 and healthBodyCurrent == 1000.0 and healthPetrolTankCurrent == 1000.0) then return end
 
-    -- Use the largest scaled delta as the primary engine damage source
-    local combinedDelta = math.max(engineDeltaScaled, bodyDeltaScaled, petrolTankDeltaScaled)
+    -- In fire mode: keep engine at previous value (don't let GTA's healing take effect)
+    if (isInFireMode) then
+        healthEngineNew = math.min(healthEngineLast, healthEngineCurrent)
+    else
+        -- Use the largest scaled delta as the primary engine damage source
+        local combinedDelta = math.max(engineDeltaScaled, bodyDeltaScaled, petrolTankDeltaScaled)
 
-    -- Scale back near-fatal hits to give a brief window before failure
-    if (combinedDelta > (healthEngineCurrent - cfg.engineSafeGuard)) then
-        combinedDelta = combinedDelta * 0.7
+        -- Scale back near-fatal hits to give a brief window before failure
+        if (combinedDelta > (healthEngineCurrent - cfg.engineSafeGuard)) then
+            combinedDelta = combinedDelta * 0.7
+        end
+
+        -- Cap to leave room for cascading failure
+        if (combinedDelta > healthEngineCurrent) then
+            combinedDelta = healthEngineCurrent - (cfg.cascadingFailureThreshold / 5)
+        end
+
+        healthEngineNew = healthEngineLast - combinedDelta
     end
-
-    -- Cap to leave room for cascading failure
-    if (combinedDelta > healthEngineCurrent) then
-        combinedDelta = healthEngineCurrent - (cfg.cascadingFailureThreshold / 5)
-    end
-
-    healthEngineNew = healthEngineLast - combinedDelta
 
     if (bodyDelta > 0) then healthBodyNew = healthBodyLast - bodyDeltaScaled end
     if (petrolTankDelta > 0) then healthPetrolTankNew = healthPetrolTankLast - petrolTankDeltaScaled end
@@ -163,8 +174,10 @@ local function processDamage(veh)
         healthEngineNew = healthEngineNew - (0.1 * cfg.cascadingFailureSpeedFactor)
     end
 
-    if (healthEngineNew < cfg.engineSafeGuard) then healthEngineNew = cfg.engineSafeGuard end
-    if (healthPetrolTankCurrent < 750) then healthPetrolTankNew = 750.0 end
+    if (not isInFireMode) then
+        if (healthEngineNew < cfg.engineSafeGuard) then healthEngineNew = cfg.engineSafeGuard end
+        if (healthPetrolTankCurrent < 750) then healthPetrolTankNew = 750.0 end
+    end
     if (healthBodyNew < 0) then healthBodyNew = 0.0 end
 end
 
@@ -187,6 +200,14 @@ AddStateBagChangeHandler("currentVehicle", nil, function(bagName, key, value)
 
             if (not wasInVehicleLastTick) then
                 onVehicleEnter(currentVehicle)
+            end
+
+            if (Config.Settings.debug) then
+                print(('[FIRE DEBUG] tick | onFire=%s | fireMode=%s | engineCur=%.2f | engineNew=%.2f | engineLast=%.2f | petrolCur=%.2f | wasInVeh=%s'):format(
+                    tostring(IsEntityOnFire(currentVehicle)), tostring(isInFireMode),
+                    healthEngineCurrent, healthEngineNew, healthEngineLast,
+                    healthPetrolTankCurrent, tostring(wasInVehicleLastTick)
+                ))
             end
 
             if (healthEngineNew ~= healthEngineCurrent) then
