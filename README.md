@@ -1,5 +1,7 @@
 [![ko-fi banner2](https://github.com/user-attachments/assets/42eff455-5757-4888-ad88-d61893edcc33)](https://ko-fi.com/zykeresources)
 
+# [> Download](https://github.com/Zyke-Resources/zyke_realisticvehicles/releases/latest)
+
 This resource manages the following:
 - Vehicle body deformation.
 - Vehicle health damage multipliers (engine, body, petrol tank).
