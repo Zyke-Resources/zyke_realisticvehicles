@@ -48,6 +48,9 @@ function ApplyDeformation(veh, deformation)
                     totalDmg = deformation[i][2]
                 end
 
+                -- Ensure totalDmg is a number, not a vector
+                if (type(totalDmg) ~= "number") then totalDmg = #(totalDmg) end
+
                 local currDef = GetVehicleDeformationAtPos(veh, x, y, z)
                 local currDmg = #(currDef)
                 local diff = totalDmg - currDmg
